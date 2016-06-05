@@ -1,22 +1,71 @@
 header#banner.hero-unit
   .container
-    h1 'Allo, 'Allo!
-    p.lead Kick-start your next web app with Angular Fullstack
-    img(src='assets/images/yeoman.png', alt='I\'m Yeoman')
+    h1
+      div.triangle-bg
+        img(src='assets/images/logo_aliims.png', alt='logo_aliims')
+        |  ALIIMS.IO
+        p.lead A Light Identification Ivd Manufacturer Service
+    p.small Dedicated to robust dematerialized product identification
 
 .container
   .row
     .col-lg-12
-      h1.page-header Features:
-      ul.nav.nav-tabs.nav-stacked.col-md-4.col-lg-4.col-sm-6(ng-repeat='thing in $ctrl.awesomeThings')
-        li
-          a(href='#', uib-tooltip='{{thing.info}}')
-            | {{thing.name}}
-            button.close(type='button', ng-click='$ctrl.deleteThing(thing)') &times;
+      h1.page-header Customers
+      .row
+        ul.list-unstyled
+          li.col-md-6.col-lg-6.col-sm-6.font-size-large
+            ul.col-md-6.col-lg-6.col-sm-6.list-unstyled(style='text-align: right')
+              li
+                strong name: 
+                em sta
+              li
+                strong version: 
+                em 001
+              li 
+                strong status: 
+                em development
+              li
+                strong category: 
+                em identification
+              li.lead(style='text-align: right')
+                button.btn.btn-primary(type='submit', ui-sref='sta001') GO to app
+            a.img-responsive.col-md-6.col-lg-6.col-sm-6(href='#')
+              img(src='assets/images/logo_stago.png', alt='logo_stago')
+          li.col-md-6.col-lg-6.col-sm-6.font-size-large
+            ul.col-md-6.col-lg-6.col-sm-6.list-unstyled(style='text-align: right')
+              li
+                strong name: 
+                em tco
+              li
+                strong version: 
+                em 001
+              li
+                strong status: 
+                em specification
+              li
+                strong category: 
+                em identification
+              li.lead(style='text-align: right')
+                button.btn.btn-default.disabled(type='submit', href='#') GO to app
+            a.img-responsive.col-md-6.col-lg-6.col-sm-6(href='#')
+              img(src='assets/images/logo_tcoag.png', alt='logo_tcoag')
 
-  form.thing-form
-    label Syncs in realtime across clients
-    p.input-group
-      input.form-control(type='text', placeholder='Add a new thing here.', ng-model='$ctrl.newThing')
-      span.input-group-btn
-        button.btn.btn-primary(type='submit', ng-click='$ctrl.addThing()') Add New
+.container
+  .row
+    .col-lg-12
+      h1.page-header Messages
+      ul.nav.nav-tabs.nav-stacked.col-md-4.col-lg-4.col-sm-6(ng-show='$ctrl.isAdmin()',ng-repeat='message in $ctrl.messages')
+        li
+          div(uib-tooltip='{{message.email}}')
+            a(href='#', ng-click='$ctrl.showMessage(message.content, message)')
+              | {{message.description}}
+            button.close(type='button', ng-click='$ctrl.deleteMessage(message)') &times;
+  form.message-form
+    label Leave a message here to know more or to be contacted
+    div.form-group
+      input.form-control(type="email", id="messageInputEmail", placeholder="Email", ng-model='$ctrl.newMessage.email')
+    div.form-group
+      input.form-control(type="text", id="messageInputDescription", placeholder="Description", ng-model='$ctrl.newMessage.description')
+    div.form-group
+      textarea.form-control(rows="3", id="messageInputContent", placeholder="Content", ng-model='$ctrl.newMessage.content')
+    button.btn.btn-primary(type='submit', ng-click='$ctrl.addMessage()') Submit
