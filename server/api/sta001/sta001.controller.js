@@ -13,7 +13,7 @@ import _ from 'lodash';
 import Sta001 from './sta001.model';
 
 import fs from 'fs';
-var pdfUtil = require('pdf-to-text');
+import pdf_to_text from 'pdf-to-text';
 
 var kitBarcodeEncodingCut = 15;
 var kitBarcodeDecoding = ['A0', 'A1', 'A3', 'A6', 'A$', 'A+', 'A5', 'A:', 'A4', 'A/', 'A7', 'B2', 'B.', 'B-', 'B9', 'B8'];
@@ -111,10 +111,11 @@ export function destroy(req, res) {
 // Uploads a new Sta001
 export function upload(req, res) {
   var o = {};
-  pdfUtil.info(req.file.path, function(err, info) {
+  var pdf_to_text = require('pdf-to-text');
+  pdf_to_text.info(req.file.path, function(err, info) {
     if (err) throw(err);
     o.info = info;
-    pdfUtil.pdfToText(req.file.path, function(err, data) {
+    pdf_to_text.pdfToText(req.file.path, function(err, data) {
       if (err) throw(err);
       o.data = data;
       o.decode = decode(data);
