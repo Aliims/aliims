@@ -111,24 +111,26 @@ export function destroy(req, res) {
 // Uploads a new Sta001
 export function upload(req, res) {
   var o = {};
+  console.log(req.file);
   var pdf_to_text = require('pdf-to-text');
   pdf_to_text.info(req.file.path, function(err, info) {
-    if (err) throw(err);
-    o.info = info;
-    pdf_to_text.pdfToText(req.file.path, function(err, data) {
-      if (err) throw(err);
-      o.data = data;
-      o.decode = decode(data);
-      console.log(JSON.stringify(o));
-      fs.writeFile(
-        req.file.path+'_decode.json', 
-        JSON.stringify(o),
-        function (err) {if (err) return console.log(err);}
-      );
-      return res.status(200).json(o.decode);
-    });
+    console.log(info);
+  //   if (err) throw(err);
+  //   o.info = info;
+  //   pdf_to_text.pdfToText(req.file.path, function(err, data) {
+  //     if (err) throw(err);
+  //     o.data = data;
+  //     o.decode = decode(data);
+  //     console.log(JSON.stringify(o));
+  //     fs.writeFile(
+  //       req.file.path+'_decode.json', 
+  //       JSON.stringify(o),
+  //       function (err) {if (err) return console.log(err);}
+  //     );
+  //     return res.status(200).json(o.decode);
+  //   });
   });
-  // return res.status(200).json(o);
+  return res.status(200).json(o);
 
 }
 
