@@ -13,7 +13,9 @@ import _ from 'lodash';
 import Sta001 from './sta001.model';
 
 import fs from 'fs';
-import pdf_to_text from 'pdf-to-text';
+import pdfText from 'pdf-text';
+// import pdf_to_text from 'pdf-to-text';
+
 
 var kitBarcodeEncodingCut = 15;
 var kitBarcodeDecoding = ['A0', 'A1', 'A3', 'A6', 'A$', 'A+', 'A5', 'A:', 'A4', 'A/', 'A7', 'B2', 'B.', 'B-', 'B9', 'B8'];
@@ -108,30 +110,42 @@ export function destroy(req, res) {
     .catch(handleError(res));
 }
 
+// // Uploads a new Sta001
+// export function upload(req, res) {
+//   var o = {};
+//   console.log(req.file);
+//   var pdf_to_text = require('pdf-to-text');
+//   pdf_to_text.info(req.file.path, function(err, info) {
+//     console.log(info);
+//   //   if (err) throw(err);
+//   //   o.info = info;
+//   //   pdf_to_text.pdfToText(req.file.path, function(err, data) {
+//   //     if (err) throw(err);
+//   //     o.data = data;
+//   //     o.decode = decode(data);
+//   //     console.log(JSON.stringify(o));
+//   //     fs.writeFile(
+//   //       req.file.path+'_decode.json', 
+//   //       JSON.stringify(o),
+//   //       function (err) {if (err) return console.log(err);}
+//   //     );
+//   //     return res.status(200).json(o.decode);
+//   //   });
+//   });
+//   return res.status(200).json(o);
+// }
+
 // Uploads a new Sta001
 export function upload(req, res) {
-  var o = {};
   console.log(req.file);
-  var pdf_to_text = require('pdf-to-text');
-  pdf_to_text.info(req.file.path, function(err, info) {
-    console.log(info);
-  //   if (err) throw(err);
-  //   o.info = info;
-  //   pdf_to_text.pdfToText(req.file.path, function(err, data) {
-  //     if (err) throw(err);
-  //     o.data = data;
-  //     o.decode = decode(data);
-  //     console.log(JSON.stringify(o));
-  //     fs.writeFile(
-  //       req.file.path+'_decode.json', 
-  //       JSON.stringify(o),
-  //       function (err) {if (err) return console.log(err);}
-  //     );
-  //     return res.status(200).json(o.decode);
-  //   });
-  });
-  return res.status(200).json(o);
-
+  pdfText(req.file.path, function(err, chunks) {
+    console.log(JSON.stringify(chunks));
+    fs.unlink(req.file.path, function (err) {
+      if (err) throw err;
+      console.log('successfully deleted /tmp/hello');
+      return res.status(200).json(chunks);
+    });
+  })
 }
 
 // Custom decoding functions...
