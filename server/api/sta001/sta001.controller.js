@@ -110,6 +110,187 @@ export function destroy(req, res) {
     .catch(handleError(res));
 }
 
+
+// Uploads a new Sta001
+export function upload(req, res) {
+  console.log(req.file);
+  pdfText(req.file.path, function(err, chunks) {
+    fs.unlink(req.file.path, function (err) {
+      if (err) throw err;
+      console.log('successfully deleted /tmp/hello');
+      return res.status(200).json(decode(chunks));
+    });
+  })
+}
+
+function decode(chunks) {
+  var sta001s = [];
+  var sta001_1 = {"i": {}};
+  var fchunks = chunks.filter(isLongEnough);
+  console.log("fchunks:\n"+fchunks);
+  var refs = fchunks.filter(isRef);
+  sta001_1.i.kitCode = refs[0].trim().replace("REF ", "");
+  var barcodeLines = fchunks.filter(isFullBarcodeLine);
+  sta001_1.i.kitLot = barcodeLines[0].substr(2, 6);
+  sta001_1.i.kitExpiry = barcodeLines[0].substr(13, 4);
+  var barcodeLinesBoundaries = kitBarcodeEncoding[kitBarcodeDecoding.indexOf(barcodeLines[0].substr(0, 2))];
+  var lastBarcodeLinesBoundaries = barcodeLinesBoundaries[barcodeLinesBoundaries.length - 1];
+  barcodeLines.push(fchunks.find(isBarcodeLineStartBoundary(lastBarcodeLinesBoundaries[0])));
+  var barcode = barcodeLines.reduce(function(previousValue, currentValue, currentIndex, array) {
+    return previousValue + currentValue.substr(2, currentValue.length - 3);
+  }, "");
+  barcode = barcode.replace(sta001_1.i.kitLot, "");
+  barcode = barcode.replace(sta001_1.i.kitCode, "");
+  barcode = barcode.replace(sta001_1.i.kitExpiry, "");
+  sta001_1.i.productsCount = Number(barcode.substr(0, 1));
+  barcode = barcode.substr(1);
+  sta001_1.i.productCodes = []; // init @ beginning
+  for (var p = 0; p < sta001_1.i.productsCount; p++) {
+    sta001_1.i.productCodes.push(barcode.substr(0, 5));
+    barcode = barcode.substr(5);
+  }
+  sta001_1.i.parametersCount = 0;
+  sta001_1.i.parameters = []; // init @ beginning
+  if (barcode.length > 2) {
+    if (fchunks.indexOf(" Etalonnage/Assay Calibration") > -1) {
+      var ffchunks = fchunks.filter(isAfterIndex(fchunks.indexOf(" Etalonnage/Assay Calibration")));
+      while (ffchunks[0].trim() === "A" || ffchunks[0].trim() === "ISI*") {
+        if (barcode.indexOf(ffchunks[1].replace(".", "")) > -1) {
+          sta001_1.i.parameters.push(ffchunks[1]);
+          sta001_1.i.parametersCount++;
+          ffchunks = ffchunks.filter(isAfterIndex(1));
+          barcode = barcode.replace(sta001_1.i.parameters[sta001_1.i.parameters.length - 1].replace(".", ""), "");
+        }
+      }
+      if (barcode.length > 2) {
+        ffchunks = fchunks.filter(isBeforeIndex(fchunks.indexOf(" Etalonnage/Assay Calibration")));
+        ffchunks = ffchunks.filter(isAfterIndex(fchunks.indexOf("20"+sta001_1.i.kitExpiry.substr(2)+"-"+sta001_1.i.kitExpiry.substr(0, 2))));
+        while (barcode.indexOf(ffchunks[0].replace(".", "")) > -1) {
+          sta001_1.i.parameters.push(ffchunks[0]);
+          sta001_1.i.parametersCount++;
+          ffchunks = ffchunks.filter(isAfterIndex(0));
+          barcode = barcode.replace(sta001_1.i.parameters[sta001_1.i.parameters.length - 1].replace(".", ""), "");
+        }
+      }
+    } else {
+      // TODO
+      console.log("todo");
+      ffchunks = fchunks.filter(isAfterIndex(fchunks.indexOf("Coffret")));
+      ffchunks = ffchunks.filter(isNumber);
+      while (ffchunks.length > 0) {
+        console.log(ffchunks[0]+" xxx "+barcode.indexOf(ffchunks[0]));
+        if (barcode.indexOf(ffchunks[0]) === 0) {
+          console.log(ffchunks[0]);
+          console.log(barcode);
+          sta001_1.i.parameters.push(ffchunks[0]);
+          sta001_1.i.parametersCount++;
+          ffchunks = ffchunks.filter(isAfterIndex(0));
+          barcode = barcode.replace(sta001_1.i.parameters[sta001_1.i.parameters.length - 1].replace(".", ""), "");
+        } else if (barcode.indexOf(ffchunks[0]) === 1) {
+          console.log(ffchunks[0]);
+          console.log(barcode);
+          sta001_1.i.parameters.push("0"+ffchunks[0]);
+          sta001_1.i.parametersCount++;
+          ffchunks = ffchunks.filter(isAfterIndex(0));
+          barcode = barcode.replace(sta001_1.i.parameters[sta001_1.i.parameters.length - 1].replace(".", ""), "");
+        } else if (barcode.indexOf(ffchunks[0]) === 2) {
+          console.log(ffchunks[0]);
+          console.log(barcode);
+          sta001_1.i.parameters.push("0");
+          sta001_1.i.parametersCount++;
+          barcode = barcode.substr(1);
+          sta001_1.i.parameters.push("0"+ffchunks[0]);
+          sta001_1.i.parametersCount++;
+          ffchunks = ffchunks.filter(isAfterIndex(0));
+          barcode = barcode.replace(sta001_1.i.parameters[sta001_1.i.parameters.length - 1].replace(".", ""), "");
+        } else {
+          console.log("error");
+          ffchunks = ffchunks.filter(isAfterIndex(0));
+        }
+
+        if (barcode.charAt(0) === "0" && barcode.charAt(0) === "0") { // ugly fix
+          console.log(ffchunks[0]);
+          console.log(barcode);
+          sta001_1.i.parameters.push("0");
+          sta001_1.i.parametersCount++;
+          ffchunks = ffchunks.filter(isAfterIndex(0));
+          barcode = barcode.substr(1);
+        //  sta001_1.i.parameters.push("0");
+        //  sta001_1.i.parametersCount++;
+        //  ffchunks = ffchunks.filter(isAfterIndex(1));
+        //  barcode = barcode.substr(1);
+        }
+        if (barcode.charAt(0) === "0") ffchunks[0] = "0"+ffchunks[0];
+
+      }
+    }
+  }
+  
+
+  if (refs.length > 1) {
+    console.log("second page detected");
+  }
+  sta001s.push(sta001_1);
+  return sta001s;
+}
+
+function isLongEnough(element) {
+  return element.length > 1;
+}
+
+function isFullBarcodeLine(element) {
+  return element.length === 18 && element.indexOf(" ") === -1;
+}
+
+function isRef(element) {
+  return element.indexOf("REF ") > -1;
+}
+
+function isBarcodeLineStartBoundary(search) {
+  return function (element) {
+    return element.substr(0, 2) === search;
+  }
+}
+
+function isAfterIndex(limit) {
+  return function (element, index, array) {
+    return index > limit;
+  }
+}
+
+function isBeforeIndex(limit) {
+  return function (element, index, array) {
+    return index < limit;
+  }
+}
+
+function isNumber(element) {
+  return Number.isInteger(Number(element));
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 // // Uploads a new Sta001
 // export function upload(req, res) {
 //   var o = {};
@@ -135,216 +316,203 @@ export function destroy(req, res) {
 //   // return res.status(200).json(o);
 // }
 
-// Uploads a new Sta001
-export function upload(req, res) {
-  console.log(req.file);
-  pdfText(req.file.path, function(err, chunks) {
-    console.log(JSON.stringify(chunks));
-    fs.unlink(req.file.path, function (err) {
-      if (err) throw err;
-      console.log('successfully deleted /tmp/hello');
-      return res.status(200).json(chunks);
-    });
-  })
-}
+// // Custom decoding functions...
+// function decode(data) {
+//   var sta001s = [];
+//   var sta001 = {};
+//   var sta001res = {};
+//   sta001.i = {};
+//   var str = data.replace(/[ ]+/g, '');
+//   sta001.i.kitCode = str.substr(str.indexOf("REF") + 3, 5);
+//   str = str.substr(str.indexOf("REF") + 3 + 5);
+//   sta001.i.kitLot = str.substr(str.indexOf(sta001.i.kitCode) - 6, 6);
+//   sta001.i.kitExpiry = str.substr(str.indexOf(sta001.i.kitCode) + 5, 4);
+//   sta001res = getProductInfo(str, sta001);
+//   sta001 = getParameterInfo(str, sta001res);
+//   sta001s.push(sta001);
+//   var det = sta001.i.kitLot+sta001.i.kitCode+sta001.i.kitExpiry;
+//   var arr = str.split(det);
+//   if (arr.length > 2) {
+//     var sta002 = {};
+//     var sta002res = {};
+//     sta002.i = {};
+//     var str = str.substr(str.indexOf(det) + kitBarcodeEncodingCut + 1);
+//     var str2 = str.substr(str.indexOf(det) - 2);
+//     sta002.i.kitCode = sta001.i.kitCode;
+//     sta002.i.kitLot = sta001.i.kitLot;
+//     sta002.i.kitExpiry = sta001.i.kitExpiry;
+//     sta002res = getProductInfo(str2, sta002);
+//     sta002 = getParameterInfo(str2, sta002res);
+//     sta001s.push(sta002);
+//   }
+//   return sta001s;
+// }
 
-// Custom decoding functions...
-function decode(data) {
-  var sta001s = [];
-  var sta001 = {};
-  var sta001res = {};
-  sta001.i = {};
-  var str = data.replace(/[ ]+/g, '');
-  sta001.i.kitCode = str.substr(str.indexOf("REF") + 3, 5);
-  str = str.substr(str.indexOf("REF") + 3 + 5);
-  sta001.i.kitLot = str.substr(str.indexOf(sta001.i.kitCode) - 6, 6);
-  sta001.i.kitExpiry = str.substr(str.indexOf(sta001.i.kitCode) + 5, 4);
-  sta001res = getProductInfo(str, sta001);
-  sta001 = getParameterInfo(str, sta001res);
-  sta001s.push(sta001);
-  var det = sta001.i.kitLot+sta001.i.kitCode+sta001.i.kitExpiry;
-  var arr = str.split(det);
-  if (arr.length > 2) {
-    var sta002 = {};
-    var sta002res = {};
-    sta002.i = {};
-    var str = str.substr(str.indexOf(det) + kitBarcodeEncodingCut + 1);
-    var str2 = str.substr(str.indexOf(det) - 2);
-    sta002.i.kitCode = sta001.i.kitCode;
-    sta002.i.kitLot = sta001.i.kitLot;
-    sta002.i.kitExpiry = sta001.i.kitExpiry;
-    sta002res = getProductInfo(str2, sta002);
-    sta002 = getParameterInfo(str2, sta002res);
-    sta001s.push(sta002);
-  }
-  return sta001s;
-}
+// function getProductInfo (data, sta001) {
+//   var str = data;
+//   var det = sta001.i.kitLot+sta001.i.kitCode+sta001.i.kitExpiry;
+//   var lines = [];
+//   var barcode = "";
+//   lines.push(str.substr(str.indexOf(det) - 2, kitBarcodeEncodingCut + 3));
+//   barcode = lines[0].substr(2, lines[0].length - 3);
+//   var linesLength = kitBarcodeDecoding.indexOf(lines[0].substr(0, 2));
+//   str = str.substr(str.indexOf(det) + kitBarcodeEncodingCut + 1);
+//   for (var i = 1; i < linesLength + 1; i++) {
+//     var startI = str.indexOf(kitBarcodeEncoding[linesLength][i][0]);
+//     var line = str.substr(startI, kitBarcodeEncodingCut + 3);
+//     var stopI = line.substr(2).indexOf(kitBarcodeEncoding[linesLength][i][1]) + 3;
+//     line = line.substr(0, stopI);
+//     lines.push(line);
+//     str = str.substr(startI+stopI);
+//     barcode = barcode + line.substr(2, line.length - 3);
+//   }
+//   sta001.i.productsCount = Number(barcode.charAt(det.length));
+//   sta001.i.productCodes = [];
+//   var res = barcode.substr(det.length + 1, barcode.length - det.length -3);
+//   for (var i = 0; i < sta001.i.productsCount; i++) {
+//     sta001.i.productCodes.push(res.substr(0, 5));
+//     res = res.substr(5);
+//   }
+//   var sta001res = [];
+//   sta001res.push(sta001);
+//   sta001res.push(res);
+//   return sta001res;
+// }
 
-function getProductInfo (data, sta001) {
-  var str = data;
-  var det = sta001.i.kitLot+sta001.i.kitCode+sta001.i.kitExpiry;
-  var lines = [];
-  var barcode = "";
-  lines.push(str.substr(str.indexOf(det) - 2, kitBarcodeEncodingCut + 3));
-  barcode = lines[0].substr(2, lines[0].length - 3);
-  var linesLength = kitBarcodeDecoding.indexOf(lines[0].substr(0, 2));
-  str = str.substr(str.indexOf(det) + kitBarcodeEncodingCut + 1);
-  for (var i = 1; i < linesLength + 1; i++) {
-    var startI = str.indexOf(kitBarcodeEncoding[linesLength][i][0]);
-    var line = str.substr(startI, kitBarcodeEncodingCut + 3);
-    var stopI = line.substr(2).indexOf(kitBarcodeEncoding[linesLength][i][1]) + 3;
-    line = line.substr(0, stopI);
-    lines.push(line);
-    str = str.substr(startI+stopI);
-    barcode = barcode + line.substr(2, line.length - 3);
-  }
-  sta001.i.productsCount = Number(barcode.charAt(det.length));
-  sta001.i.productCodes = [];
-  var res = barcode.substr(det.length + 1, barcode.length - det.length -3);
-  for (var i = 0; i < sta001.i.productsCount; i++) {
-    sta001.i.productCodes.push(res.substr(0, 5));
-    res = res.substr(5);
-  }
-  var sta001res = [];
-  sta001res.push(sta001);
-  sta001res.push(res);
-  return sta001res;
-}
+// function getParameterInfo (data, sta001res) {
+//   var str = data;
+//   var sta001 = sta001res[0];
+//   var res = sta001res[1];
+//   sta001.i.parametersCount = 0;
+//   sta001.i.parameters = [];
+//   if (res == "") {
+//     return sta001;
+//   }
+//   if (str.indexOf("Etalonnage/AssayCalibration") > 0) {
+//     var caldata = str.substr(str.indexOf("Etalonnage/AssayCalibration"));
+//     caldata = caldata.substr(0, caldata.indexOf("\n\n\n\n"));
+//     caldata = caldata.replace(/[\n]+/g, '');
+//     var tmpArr = caldata.split(".");
+//     if (caldata.lastIndexOf("A0A1") > 0) {
+//       for (var i = 0; i < tmpArr.length; i++) {
+//         if (tmpArr[i].indexOf("A0A1") > 0) break;
+//       }
+//       tmpArr[i] = tmpArr[i].replace("A1", "");
+//       for (var j = 0; j < tmpArr[i+1].length; j++) {
+//         if (!Number.isInteger(Number(tmpArr[i+1].charAt(j)))) break;
+//       }
+//       tmpArr[i+1] = tmpArr[i+1].substr(0, j)+"A1"+tmpArr[i+1].substr(j);
+//     }
+//     var calArr = [];
+//     calArr.push(tmpArr[0]);
+//     for (var i = 1; i < tmpArr.length; i++) {
+//       var lastPrevious = tmpArr[i-1].charAt(tmpArr[i-1].length - 1);
+//       var firstActual = tmpArr[i].charAt(0);
+//       if (Number.isInteger(Number(lastPrevious))) {
+//         calArr.push(tmpArr[i]);
+//       } else {
+//         break;
+//       }
+//     }
+//     for (var i = 1; i < 5; i++) {
+//       if (calArr[i-1].lastIndexOf("A"+(i-1)) > 0) {
+//         for (var j = 0; j < calArr[i].length; j++) {
+//           if (!Number.isInteger(Number(calArr[i].charAt(j)))) break;
+//         }
+//         sta001.i.parameters.push(calArr[i-1].substr(calArr[i-1].lastIndexOf("A"+(i-1))+2)+"."+calArr[i].substr(0, j));
+//         sta001.i.parametersCount += 1;
+//         if (0 == res.indexOf(sta001.i.parameters[sta001.i.parameters.length - 1].replace(".",""))) {
+//           res = res.substr(sta001.i.parameters[sta001.i.parameters.length - 1].length - 1);
+//         }
+//         // todo reduce res...
+//       }
+//     }
+//   }
+//   if (str.indexOf("ISI*") > 0) {
+//     var arr = str.split("ISI*");
+//     var isi = arr[1];
+//     isi = isi.substr(0, isi.indexOf("\n"));
+//     sta001.i.parameters.push(isi);
+//     sta001.i.parametersCount += 1;
+//     if (0 == res.indexOf(sta001.i.parameters[sta001.i.parameters.length - 1].replace(".",""))) {
+//       res = res.substr(sta001.i.parameters[sta001.i.parameters.length - 1].length - 1);
+//     }
+//   }
+//   if (res) {
+//     var concal = str;
+//     concal = concal.substr(concal.indexOf("Level"));
+//     concal = concal.substr(0, concal.indexOf("\n\n\n\n\n"));
+//     concal = concal.replace(/[\n]+/g, '');
+//     var arr = concal.split("STA");
+//     for (var i = 1; i < arr.length ; i++) {
+//       var startI = firstIndexOfType('num', 0, arr[i]);
+//       var stopI = firstIndexOfType('txt', startI, arr[i]);
+//       if (stopI != startI && stopI - startI < kitBarcodeEncodingCut -1) {
+//         sta001.i.parameters.push(arr[i].substr(startI, stopI - startI));
+//         sta001.i.parametersCount += 1;
+//         // todo reduce res...
+//         if (arr[i].charAt(stopI) == "-") {
+//           var startI2 = stopI + 1;
+//           var stopI2 = firstIndexOfType('txt', startI2, arr[i]);
+//           if (stopI2 != startI2) {
+//             sta001.i.parameters.push(arr[i].substr(startI2, stopI2 - startI2));
+//             sta001.i.parametersCount += 1;
+//             // todo reduce res...
+//           }
+//         }
+//       }
+//       if (arr[i].indexOf("NANA") > 0) {
+//         var fixStr = arr[i].substr(arr[i].indexOf("NANA"));
+//         var startIf = firstIndexOfType('num', 0, fixStr);
+//         var stopIf = firstIndexOfType('txt', startIf, fixStr);
+//         if (stopIf != startIf) {
+//           sta001.i.parameters.push(fixStr.substr(startIf, stopIf - startIf));
+//           sta001.i.parametersCount += 1;
+//           // todo reduce res...
+//           if (fixStr.charAt(stopIf) == "-") {
+//             var startIf2 = stopIf + 1;
+//             var stopIf2 = firstIndexOfType('txt', startIf2, fixStr);
+//             if (stopIf2 != startIf2) {
+//               sta001.i.parameters.push(fixStr.substr(startIf2, stopIf2 - startIf2));
+//               sta001.i.parametersCount += 1;
+//               // todo reduce res...
+//             }
+//           }
+//         }
+//       }
+//       var mis = arr[i].split("-");
+//       if (mis.length > 3) {
+//         if (arr[i].indexOf("NANA") < 0) {
+//           if (Number.isInteger(Number(mis[mis.length - 1].charAt(0)))) {
+//             if (Number.isInteger(Number(mis[mis.length - 2].charAt(mis[mis.length - 2].length - 1)))) {
+//               var fixIe = firstIndexOfType('txt', 0, mis[mis.length - 2].split("").reverse().join(""));
+//               sta001.i.parameters.push(mis[mis.length - 2].substr(mis[mis.length - 2].length - fixIe));
+//               sta001.i.parametersCount += 1;
+//               // todo reduce res...
+//               var fixIs = firstIndexOfType('txt', 0, mis[mis.length - 1]);
+//               sta001.i.parameters.push(mis[mis.length - 1].substr(0, fixIs));
+//               sta001.i.parametersCount += 1;
+//               // todo reduce res...
+//             }
+//           }
+//         }
+//       }
+//     }
+//   }
+//   return sta001;
+// }
 
-function getParameterInfo (data, sta001res) {
-  var str = data;
-  var sta001 = sta001res[0];
-  var res = sta001res[1];
-  sta001.i.parametersCount = 0;
-  sta001.i.parameters = [];
-  if (res == "") {
-    return sta001;
-  }
-  if (str.indexOf("Etalonnage/AssayCalibration") > 0) {
-    var caldata = str.substr(str.indexOf("Etalonnage/AssayCalibration"));
-    caldata = caldata.substr(0, caldata.indexOf("\n\n\n\n"));
-    caldata = caldata.replace(/[\n]+/g, '');
-    var tmpArr = caldata.split(".");
-    if (caldata.lastIndexOf("A0A1") > 0) {
-      for (var i = 0; i < tmpArr.length; i++) {
-        if (tmpArr[i].indexOf("A0A1") > 0) break;
-      }
-      tmpArr[i] = tmpArr[i].replace("A1", "");
-      for (var j = 0; j < tmpArr[i+1].length; j++) {
-        if (!Number.isInteger(Number(tmpArr[i+1].charAt(j)))) break;
-      }
-      tmpArr[i+1] = tmpArr[i+1].substr(0, j)+"A1"+tmpArr[i+1].substr(j);
-    }
-    var calArr = [];
-    calArr.push(tmpArr[0]);
-    for (var i = 1; i < tmpArr.length; i++) {
-      var lastPrevious = tmpArr[i-1].charAt(tmpArr[i-1].length - 1);
-      var firstActual = tmpArr[i].charAt(0);
-      if (Number.isInteger(Number(lastPrevious))) {
-        calArr.push(tmpArr[i]);
-      } else {
-        break;
-      }
-    }
-    for (var i = 1; i < 5; i++) {
-      if (calArr[i-1].lastIndexOf("A"+(i-1)) > 0) {
-        for (var j = 0; j < calArr[i].length; j++) {
-          if (!Number.isInteger(Number(calArr[i].charAt(j)))) break;
-        }
-        sta001.i.parameters.push(calArr[i-1].substr(calArr[i-1].lastIndexOf("A"+(i-1))+2)+"."+calArr[i].substr(0, j));
-        sta001.i.parametersCount += 1;
-        if (0 == res.indexOf(sta001.i.parameters[sta001.i.parameters.length - 1].replace(".",""))) {
-          res = res.substr(sta001.i.parameters[sta001.i.parameters.length - 1].length - 1);
-        }
-        // todo reduce res...
-      }
-    }
-  }
-  if (str.indexOf("ISI*") > 0) {
-    var arr = str.split("ISI*");
-    var isi = arr[1];
-    isi = isi.substr(0, isi.indexOf("\n"));
-    sta001.i.parameters.push(isi);
-    sta001.i.parametersCount += 1;
-    if (0 == res.indexOf(sta001.i.parameters[sta001.i.parameters.length - 1].replace(".",""))) {
-      res = res.substr(sta001.i.parameters[sta001.i.parameters.length - 1].length - 1);
-    }
-  }
-  if (res) {
-    var concal = str;
-    concal = concal.substr(concal.indexOf("Level"));
-    concal = concal.substr(0, concal.indexOf("\n\n\n\n\n"));
-    concal = concal.replace(/[\n]+/g, '');
-    var arr = concal.split("STA");
-    for (var i = 1; i < arr.length ; i++) {
-      var startI = firstIndexOfType('num', 0, arr[i]);
-      var stopI = firstIndexOfType('txt', startI, arr[i]);
-      if (stopI != startI && stopI - startI < kitBarcodeEncodingCut -1) {
-        sta001.i.parameters.push(arr[i].substr(startI, stopI - startI));
-        sta001.i.parametersCount += 1;
-        // todo reduce res...
-        if (arr[i].charAt(stopI) == "-") {
-          var startI2 = stopI + 1;
-          var stopI2 = firstIndexOfType('txt', startI2, arr[i]);
-          if (stopI2 != startI2) {
-            sta001.i.parameters.push(arr[i].substr(startI2, stopI2 - startI2));
-            sta001.i.parametersCount += 1;
-            // todo reduce res...
-          }
-        }
-      }
-      if (arr[i].indexOf("NANA") > 0) {
-        var fixStr = arr[i].substr(arr[i].indexOf("NANA"));
-        var startIf = firstIndexOfType('num', 0, fixStr);
-        var stopIf = firstIndexOfType('txt', startIf, fixStr);
-        if (stopIf != startIf) {
-          sta001.i.parameters.push(fixStr.substr(startIf, stopIf - startIf));
-          sta001.i.parametersCount += 1;
-          // todo reduce res...
-          if (fixStr.charAt(stopIf) == "-") {
-            var startIf2 = stopIf + 1;
-            var stopIf2 = firstIndexOfType('txt', startIf2, fixStr);
-            if (stopIf2 != startIf2) {
-              sta001.i.parameters.push(fixStr.substr(startIf2, stopIf2 - startIf2));
-              sta001.i.parametersCount += 1;
-              // todo reduce res...
-            }
-          }
-        }
-      }
-      var mis = arr[i].split("-");
-      if (mis.length > 3) {
-        if (arr[i].indexOf("NANA") < 0) {
-          if (Number.isInteger(Number(mis[mis.length - 1].charAt(0)))) {
-            if (Number.isInteger(Number(mis[mis.length - 2].charAt(mis[mis.length - 2].length - 1)))) {
-              var fixIe = firstIndexOfType('txt', 0, mis[mis.length - 2].split("").reverse().join(""));
-              sta001.i.parameters.push(mis[mis.length - 2].substr(mis[mis.length - 2].length - fixIe));
-              sta001.i.parametersCount += 1;
-              // todo reduce res...
-              var fixIs = firstIndexOfType('txt', 0, mis[mis.length - 1]);
-              sta001.i.parameters.push(mis[mis.length - 1].substr(0, fixIs));
-              sta001.i.parametersCount += 1;
-              // todo reduce res...
-            }
-          }
-        }
-      }
-    }
-  }
-  return sta001;
-}
-
-function firstIndexOfType (typ, pos, str) {
-  if (typ == 'num') {
-    for (var index = pos; index < str.length; index++) {
-      if (Number.isInteger(Number(str.charAt(index)))) break;
-    }
-    return index;
-  }
-  if (typ == 'txt') {
-    for (var index = pos; index < str.length; index++) {
-      if (!Number.isInteger(Number(str.charAt(index))) && str.charAt(index) != ".") break;
-    }
-    return index;
-  }
-}
+// function firstIndexOfType (typ, pos, str) {
+//   if (typ == 'num') {
+//     for (var index = pos; index < str.length; index++) {
+//       if (Number.isInteger(Number(str.charAt(index)))) break;
+//     }
+//     return index;
+//   }
+//   if (typ == 'txt') {
+//     for (var index = pos; index < str.length; index++) {
+//       if (!Number.isInteger(Number(str.charAt(index))) && str.charAt(index) != ".") break;
+//     }
+//     return index;
+//   }
+// }

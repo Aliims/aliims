@@ -228,7 +228,7 @@
             on-success="$ctrl.onSuccess(response)") Fileupload
         div.col-lg-8(ng-show = "$ctrl.decodes.length > 0")
           h2 2/ Validate
-          div(ng-repeat = "decode in $ctrl.decodes")
+          div(ng-repeat = "decode in $ctrl.decodes track by $index")
               div.col-lg-9
                 pre {{decode | json}}
               div.col-lg-3

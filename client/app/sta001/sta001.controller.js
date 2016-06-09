@@ -281,6 +281,7 @@ class Sta001Component {
   // IMPORT
     onSuccess(response) {
       for (var i = 0; i < response.data.length; i++) {
+        console.log("response.data\n"+response.data[i]);
         this.decodes.push(response.data[i]);
       }
       this.loaderVisible = true;
